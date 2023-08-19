@@ -13,7 +13,8 @@ module desui_labs::test_play {
         let min_stake_amount: u64 = 1_000_000_000; // 1 SUI
         let max_stake_amount: u64 = 50_000_000_000; // 50 SUI
         let init_pool_amount: u64 = 100 * max_stake_amount;
-        let fee_rate = 10_000; // 1%
+        let fee_rate: u128 = 10_000; // 1%
+        let player_count: u64 = 8_000;
 
         let scenario_val = setup_house<SUI>(
             init_pool_amount,
@@ -22,7 +23,6 @@ module desui_labs::test_play {
             max_stake_amount,
         );
         let scenario = &mut scenario_val;
-        let player_count: u64 = 300;
         let players = setup_players<SUI>(
             scenario,
             player_count,
@@ -32,7 +32,7 @@ module desui_labs::test_play {
 
         let idx: u64 = 0;
         while(idx < player_count) {
-            let player = *vector::borrow(&players, idx);
+            let player = vector::pop_back(&mut players);
             let seed = address::to_bytes(player);
             // start a game
             ts::next_tx(scenario, player);
@@ -48,14 +48,21 @@ module desui_labs::test_play {
             {
                 let house = ts::take_shared<House<SUI>>(scenario);
                 assert!(cf::is_unsettled(&house, player), 0);
-                vector::push_back(&mut seed, ((idx % 256) as u8));
-                cf::settle_for_testing(&mut house, player, seed, ts::ctx(scenario));
+                let bls_sig = address::to_bytes(address::from_u256(address::to_u256(player) - (idx as u256)));
+                cf::settle_for_testing(&mut house, player, bls_sig, ts::ctx(scenario));
                 ts::return_shared(house);
             };
 
             // check if settled
             ts::next_tx(scenario, dev());
             {
+                // let coin_id = ts::most_recent_id_for_address<Coin<SUI>>(player);
+                // if (std::option::is_some(&coin_id)) {
+                //     let coin_id = std::option::destroy_some(coin_id);
+                //     let reward = ts::take_from_address_by_id<Coin<SUI>>(scenario, player, coin_id);
+                //     std::debug::print(&reward);
+                //     ts::return_to_address(player, reward);
+                // };
                 let house = ts::take_shared<House<SUI>>(scenario);
                 assert!(!cf::is_unsettled(&house, player), 0);
                 std::debug::print(&cf::house_pool_balance(&house));
