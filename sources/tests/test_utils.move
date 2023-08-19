@@ -40,11 +40,11 @@ module desui_labs::test_utils {
         player_count: u64,
         min_stake_amount: u64,
         max_stake_amount: u64,
+        seed: vector<u8>,
     ): vector<address> {
-        let player_seed = b"CoinFlip V2";
-        vector::push_back(&mut player_seed, ((player_count % 256) as u8));
+        vector::push_back(&mut seed, ((player_count % 256) as u8));
         let stake_amount_diff = max_stake_amount - min_stake_amount;
-        let rang = test_random::new(player_seed);
+        let rang = test_random::new(seed);
         let rangr = &mut rang;
 
         let players = vector<address>[];
