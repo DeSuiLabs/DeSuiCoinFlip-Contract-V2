@@ -40,7 +40,8 @@ module desui_labs::test_play_buck {
             {
                 let house = ts::take_shared<House<BUCK>>(scenario);
                 let stake = ts::take_from_sender<Coin<BUCK>>(scenario);
-                cf::start_game(&mut house, 0, seed, stake, ts::ctx(scenario));
+                let guess = ((idx % 2) as u8);
+                cf::start_game(&mut house, guess, seed, stake, ts::ctx(scenario));
                 ts::return_shared(house);
             };
 
