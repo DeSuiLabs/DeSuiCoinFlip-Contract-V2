@@ -1,5 +1,5 @@
 #[test_only]
-module desui_labs::test_play {
+module desui_labs::test_play_sui {
     use std::vector;
     use sui::sui::SUI;
     use sui::coin::Coin;
@@ -9,7 +9,7 @@ module desui_labs::test_play {
     use desui_labs::test_utils::{setup_house, setup_players, dev};
 
     #[test]
-    fun test_play() {
+    fun test_play_sui() {
         let min_stake_amount: u64 = 1_000_000_000; // 1 SUI
         let max_stake_amount: u64 = 50_000_000_000; // 50 SUI
         let init_pool_amount: u64 = 100 * max_stake_amount;
@@ -40,7 +40,8 @@ module desui_labs::test_play {
             {
                 let house = ts::take_shared<House<SUI>>(scenario);
                 let stake = ts::take_from_sender<Coin<SUI>>(scenario);
-                cf::start_game(&mut house, 0, seed, stake, ts::ctx(scenario));
+                let guess = ((idx % 2) as u8);
+                cf::start_game(&mut house, guess, seed, stake, ts::ctx(scenario));
                 ts::return_shared(house);
             };
 
