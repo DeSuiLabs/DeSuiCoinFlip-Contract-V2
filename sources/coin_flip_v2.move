@@ -16,9 +16,9 @@ module desui_labs::coin_flip_v2 {
 
     // Constants
     const FEE_PRECISION: u128 = 1_000_000;
-    const CHALLENGE_EPOCH_INTERVAL: u64 = 7;
+    const CHALLENGE_EPOCH_INTERVAL: u64 = 2;
 
-    // Errors
+    // Error codes
     const EInvalidStakeAmount: u64 = 0;
     const EInvalidGuess: u64 = 1;
     const EInvalidBlsSig: u64 = 2;
@@ -27,13 +27,16 @@ module desui_labs::coin_flip_v2 {
 
     // Events
     struct NewGame<phantom T> has copy, drop {
+        game_id: ID,
         player: address,
         guess: u8,
+        seed: vector<u8>,
         stake_amount: u64,
         partnership_type: Option<TypeName>,
     }
 
     struct Outcome<phantom T> has copy, drop {
+        game_id: ID,
         player: address,
         player_won: bool,
         pnl: u64,
@@ -53,6 +56,7 @@ module desui_labs::coin_flip_v2 {
 
     struct Game<phantom T> has key, store {
         id: UID,
+        player: address,
         start_epoch: u64,
         stake: Balance<T>,
         guess: u8,
@@ -159,9 +163,8 @@ module desui_labs::coin_flip_v2 {
         ctx: &mut TxContext,
     ) {
         let fee_rate = house.fee_rate;
-        let player = tx_context::sender(ctx);
-        let game = new_game(house, guess, seed, stake, fee_rate, option::none(), ctx);
-        dof::add(&mut house.id, player, game);
+        let (game_id, game) = new_game(house, guess, seed, stake, fee_rate, option::none(), ctx);
+        dof::add(&mut house.id, game_id, game);
     }
 
     public entry fun start_game_with_parternship<T, P: key>(
@@ -175,9 +178,8 @@ module desui_labs::coin_flip_v2 {
     ) {
         let fee_rate = min_u128(house.fee_rate, partnership.fee_rate);
         let partnership_type = option::some(type_name::get<P>());
-        let player = tx_context::sender(ctx);
-        let game = new_game(house, guess, seed, stake, fee_rate, partnership_type, ctx);
-        dof::add(&mut house.id, player, game);
+        let (game_id, game) = new_game(house, guess, seed, stake, fee_rate, partnership_type, ctx);
+        dof::add(&mut house.id, game_id, game);
     }
 
     public entry fun start_game_with_kiosk<T, P: key + store>(
@@ -196,20 +198,20 @@ module desui_labs::coin_flip_v2 {
             kiosk::has_item_with_type<P>(kiosk, item),
             EKioskItemNotFound,
         );
-        let player = tx_context::sender(ctx);
-        let game = new_game(house, guess, seed, stake, fee_rate, partnership_type, ctx);
-        dof::add(&mut house.id, player, game);
+        let (game_id, game) = new_game(house, guess, seed, stake, fee_rate, partnership_type, ctx);
+        dof::add(&mut house.id, game_id, game);
     }
 
     public entry fun settle<T>(
         house: &mut House<T>,
-        player: address,
+        game_id: ID,
         bls_sig: vector<u8>,
         ctx: &mut TxContext,
     ) {
-        let game = dof::remove<address, Game<T>>(&mut house.id, player);
+        let game = dof::remove<ID, Game<T>>(&mut house.id, game_id);
         let Game {
             id,
+            player,
             start_epoch: _,
             stake,
             guess,
@@ -246,6 +248,7 @@ module desui_labs::coin_flip_v2 {
         };
 
         event::emit(Outcome<T> {
+            game_id,
             player,
             player_won,
             pnl,
@@ -255,13 +258,14 @@ module desui_labs::coin_flip_v2 {
 
     public entry fun challenge<T>(
         house: &mut House<T>,
-        player: address,
+        game_id: ID,
         ctx: &mut TxContext,
     ) {
         let current_epoch = tx_context::epoch(ctx);
-        let game = dof::remove<address, Game<T>>(&mut house.id, player);
+        let game = dof::remove<ID, Game<T>>(&mut house.id, game_id);
         let Game {
             id,
+            player,
             start_epoch,
             stake,
             guess: _,
@@ -275,6 +279,7 @@ module desui_labs::coin_flip_v2 {
         
         object::delete(id);
         event::emit(Outcome<T> {
+            game_id,
             player,
             player_won: true,
             pnl: 0,
@@ -290,7 +295,7 @@ module desui_labs::coin_flip_v2 {
         fee_rate: u128,
         partnership_type: Option<TypeName>,
         ctx: &mut TxContext,
-    ): Game<T> {
+    ): (ID, Game<T>) {
         // Ensure that guess is either 0 or 1
         assert!(guess == 1 || guess == 0, EInvalidGuess);
         // Ensure the stake amount is valid
@@ -302,22 +307,27 @@ module desui_labs::coin_flip_v2 {
         );
 
         let id = object::new(ctx);
+        let game_id = object::uid_to_inner(&id);
         let player = tx_context::sender(ctx);
         event::emit(NewGame<T> {
+            game_id,
             player,
             guess,
+            seed,
             stake_amount,
             partnership_type,
         });
-
-        Game<T> {
+        
+        let game = Game<T> {
             id,
+            player,
             start_epoch: tx_context::epoch(ctx),
             stake: coin::into_balance(stake),
             guess,
             seed,
             fee_rate,
-        }
+        };
+        (game_id, game)
     }
 
     fun compute_fee_amount(amount: u64, fee_rate: u128): u64 {
@@ -364,8 +374,8 @@ module desui_labs::coin_flip_v2 {
         game.seed
     }
 
-    public fun is_unsettled<T>(house: &House<T>, player: address): bool {
-        dof::exists_with_type<address, Game<T>>(&house.id, player)
+    public fun is_unsettled<T>(house: &House<T>, game_id: ID): bool {
+        dof::exists_with_type<ID, Game<T>>(&house.id, game_id)
     }
 
     #[test_only]
@@ -374,15 +384,30 @@ module desui_labs::coin_flip_v2 {
     }
 
     #[test_only]
+    public fun start_game_for_testing<T>(
+        house: &mut House<T>,
+        guess: u8,
+        seed: vector<u8>,
+        stake: Coin<T>,
+        ctx: &mut TxContext
+    ): ID {
+        let fee_rate = house.fee_rate;
+        let (game_id, game) = new_game(house, guess, seed, stake, fee_rate, option::none(), ctx);
+        dof::add(&mut house.id, game_id, game);
+        game_id    
+    }
+
+    #[test_only]
     public fun settle_for_testing<T>(
         house: &mut House<T>,
-        player: address,
+        game_id: ID,
         bls_sig: vector<u8>,
         ctx: &mut TxContext,
     ) {
-        let game = dof::remove<address, Game<T>>(&mut house.id, player);
+        let game = dof::remove<ID, Game<T>>(&mut house.id, game_id);
         let Game {
             id,
+            player,
             start_epoch: _,
             stake,
             guess,
@@ -419,6 +444,7 @@ module desui_labs::coin_flip_v2 {
         };
 
         event::emit(Outcome<T> {
+            game_id,
             player,
             player_won,
             pnl,

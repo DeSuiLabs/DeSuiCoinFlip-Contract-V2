@@ -37,21 +37,22 @@ module desui_labs::test_play_sui {
             let seed = address::to_bytes(player);
             // start a game
             ts::next_tx(scenario, player);
-            {
+            let game_id = {
                 let house = ts::take_shared<House<SUI>>(scenario);
                 let stake = ts::take_from_sender<Coin<SUI>>(scenario);
                 let guess = ((idx % 2) as u8);
-                cf::start_game(&mut house, guess, seed, stake, ts::ctx(scenario));
+                let game_id = cf::start_game_for_testing(&mut house, guess, seed, stake, ts::ctx(scenario));
                 ts::return_shared(house);
+                game_id
             };
 
             // settle
             ts::next_tx(scenario, dev());
             {
                 let house = ts::take_shared<House<SUI>>(scenario);
-                assert!(cf::is_unsettled(&house, player), 0);
+                assert!(cf::is_unsettled(&house, game_id), 0);
                 let bls_sig = address::to_bytes(address::from_u256(address::to_u256(player) - (idx as u256)));
-                cf::settle_for_testing(&mut house, player, bls_sig, ts::ctx(scenario));
+                cf::settle_for_testing(&mut house, game_id, bls_sig, ts::ctx(scenario));
                 ts::return_shared(house);
             };
 
@@ -66,7 +67,7 @@ module desui_labs::test_play_sui {
                 //     ts::return_to_address(player, reward);
                 // };
                 let house = ts::take_shared<House<SUI>>(scenario);
-                assert!(!cf::is_unsettled(&house, player), 0);
+                assert!(!cf::is_unsettled(&house, game_id), 0);
                 std::debug::print(&cf::house_pool_balance(&house));
                 ts::return_shared(house);
             };
