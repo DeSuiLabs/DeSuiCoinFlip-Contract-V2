@@ -14,18 +14,21 @@ module desui_labs::coin_flip_v2 {
     use sui::event;
     use sui::dynamic_object_field as dof;
 
-    // Constants
+    // --------------- Constants ---------------
+
     const FEE_PRECISION: u128 = 1_000_000;
     const CHALLENGE_EPOCH_INTERVAL: u64 = 2;
 
-    // Error codes
+    // --------------- Errors ---------------
+
     const EInvalidStakeAmount: u64 = 0;
     const EInvalidGuess: u64 = 1;
     const EInvalidBlsSig: u64 = 2;
     const EKioskItemNotFound: u64 = 4;
     const ECannotChallenge: u64 = 5;
 
-    // Events
+    // --------------- Events ---------------
+
     struct NewGame<phantom T> has copy, drop {
         game_id: ID,
         player: address,
@@ -43,7 +46,8 @@ module desui_labs::coin_flip_v2 {
         challenged: bool,
     }
 
-    // Objects
+    // --------------- Objects ---------------
+
     struct House<phantom T> has key {
         id: UID,
         pub_key: vector<u8>,
@@ -73,18 +77,22 @@ module desui_labs::coin_flip_v2 {
         id: UID,
     }
 
+    // --------------- Constructor ---------------
+
     fun init(ctx: &mut TxContext) {
         let admin_cap = AdminCap { id: object::new(ctx) };
         transfer::transfer(admin_cap, tx_context::sender(ctx));
     }
 
+    // --------------- House Funtions ---------------
+    
     public entry fun create_house<T>(
-        _: &AdminCap,
+        _cap: &AdminCap,
         pub_key: vector<u8>,
         fee_rate: u128,
         min_stake_amount: u64,
         max_stake_amount: u64,
-        init_pool: Coin<T>,
+        init_fund: Coin<T>,
         ctx: &mut TxContext,
     ) {
         transfer::share_object(House<T> {
@@ -93,19 +101,8 @@ module desui_labs::coin_flip_v2 {
             fee_rate,
             min_stake_amount,
             max_stake_amount,
-            pool: coin::into_balance(init_pool),
+            pool: coin::into_balance(init_fund),
             treasury: balance::zero(),
-        });
-    }
-
-    public entry fun create_partnership<P>(
-        _: &AdminCap,
-        fee_rate: u128,
-        ctx: &mut TxContext,
-    ) {
-        transfer::freeze_object(Partnership<P> {
-            id: object::new(ctx),
-            fee_rate,
         });
     }
 
@@ -155,6 +152,29 @@ module desui_labs::coin_flip_v2 {
         house.min_stake_amount = min_stake_amount;
     }
 
+    // --------------- Partnership Funtions ---------------
+
+    public entry fun create_partnership<P>(
+        _: &AdminCap,
+        fee_rate: u128,
+        ctx: &mut TxContext,
+    ) {
+        transfer::share_object(Partnership<P> {
+            id: object::new(ctx),
+            fee_rate,
+        });
+    }
+
+    public entry fun update_partnership_rate<P>(
+        _: &AdminCap,
+        partnership: &mut Partnership<P>,
+        fee_rate: u128,
+    ) {
+        partnership.fee_rate = fee_rate;
+    }
+
+    // --------------- Game Funtions ---------------
+
     public entry fun start_game<T>(
         house: &mut House<T>,
         guess: u8,
@@ -202,12 +222,58 @@ module desui_labs::coin_flip_v2 {
         dof::add(&mut house.id, game_id, game);
     }
 
+    fun new_game<T>(
+        house: &House<T>,
+        guess: u8,
+        seed: vector<u8>,
+        stake: Coin<T>,
+        fee_rate: u128,
+        partnership_type: Option<TypeName>,
+        ctx: &mut TxContext,
+    ): (ID, Game<T>) {
+        // Ensure that guess is either 0 or 1
+        assert!(guess == 1 || guess == 0, EInvalidGuess);
+        // Ensure the stake amount is valid
+        let stake_amount = coin::value(&stake);
+        assert!(
+            stake_amount >= house.min_stake_amount &&
+            stake_amount <= house.max_stake_amount,
+            EInvalidStakeAmount
+        );
+
+        let id = object::new(ctx);
+        let game_id = object::uid_to_inner(&id);
+        let player = tx_context::sender(ctx);
+        event::emit(NewGame<T> {
+            game_id,
+            player,
+            guess,
+            seed,
+            stake_amount,
+            partnership_type,
+        });
+        
+        let game = Game<T> {
+            id,
+            player,
+            start_epoch: tx_context::epoch(ctx),
+            stake: coin::into_balance(stake),
+            guess,
+            seed,
+            fee_rate,
+        };
+        (game_id, game)
+    }
+
+    // --------------- Settle Funtions ---------------
+
     public entry fun settle<T>(
         house: &mut House<T>,
-        game_id: ID,
+        game_id: address,
         bls_sig: vector<u8>,
         ctx: &mut TxContext,
     ) {
+        let game_id = object::id_from_address(game_id);
         let game = dof::remove<ID, Game<T>>(&mut house.id, game_id);
         let Game {
             id,
@@ -258,9 +324,10 @@ module desui_labs::coin_flip_v2 {
 
     public entry fun challenge<T>(
         house: &mut House<T>,
-        game_id: ID,
+        game_id: address,
         ctx: &mut TxContext,
     ) {
+        let game_id = object::id_from_address(game_id);
         let current_epoch = tx_context::epoch(ctx);
         let game = dof::remove<ID, Game<T>>(&mut house.id, game_id);
         let Game {
@@ -287,56 +354,7 @@ module desui_labs::coin_flip_v2 {
         });
     }
 
-    fun new_game<T>(
-        house: &House<T>,
-        guess: u8,
-        seed: vector<u8>,
-        stake: Coin<T>,
-        fee_rate: u128,
-        partnership_type: Option<TypeName>,
-        ctx: &mut TxContext,
-    ): (ID, Game<T>) {
-        // Ensure that guess is either 0 or 1
-        assert!(guess == 1 || guess == 0, EInvalidGuess);
-        // Ensure the stake amount is valid
-        let stake_amount = coin::value(&stake);
-        assert!(
-            stake_amount >= house.min_stake_amount &&
-            stake_amount <= house.max_stake_amount,
-            EInvalidStakeAmount
-        );
-
-        let id = object::new(ctx);
-        let game_id = object::uid_to_inner(&id);
-        let player = tx_context::sender(ctx);
-        event::emit(NewGame<T> {
-            game_id,
-            player,
-            guess,
-            seed,
-            stake_amount,
-            partnership_type,
-        });
-        
-        let game = Game<T> {
-            id,
-            player,
-            start_epoch: tx_context::epoch(ctx),
-            stake: coin::into_balance(stake),
-            guess,
-            seed,
-            fee_rate,
-        };
-        (game_id, game)
-    }
-
-    fun compute_fee_amount(amount: u64, fee_rate: u128): u64 {
-        (((amount as u128) * fee_rate / FEE_PRECISION) as u64)
-    }
-    
-    fun min_u128(x: u128, y: u128): u128 {
-        if (x <= y) { x } else { y }
-    }
+    // --------------- House Accessors ---------------
 
     public fun house_pub_key<T>(house: &House<T>): vector<u8> {
         house.pub_key
@@ -354,29 +372,47 @@ module desui_labs::coin_flip_v2 {
         (house.min_stake_amount, house.max_stake_amount)
     }
 
-    public fun start_epoch<T>(game: &Game<T>): u64 {
-        game.start_epoch
-    }
-
-    public fun guess<T>(game: &Game<T>): u8 {
-        game.guess
-    }
-
-    public fun stake_amount<T>(game: &Game<T>): u64 {
-        balance::value(&game.stake)
-    }
-
-    public fun fee_rate<T>(game: &Game<T>): u128 {
-        game.fee_rate
-    }
-
-    public fun seed<T>(game: &Game<T>): vector<u8> {
-        game.seed
-    }
-
     public fun is_unsettled<T>(house: &House<T>, game_id: ID): bool {
         dof::exists_with_type<ID, Game<T>>(&house.id, game_id)
     }
+
+    // --------------- Game Accessors ---------------
+
+    public fun borrow_game<T>(house: &House<T>, game_id: ID): &Game<T> {
+        dof::borrow<ID, Game<T>>(&house.id, game_id)
+    }
+
+    public fun game_start_epoch<T>(game: &Game<T>): u64 {
+        game.start_epoch
+    }
+
+    public fun game_guess<T>(game: &Game<T>): u8 {
+        game.guess
+    }
+
+    public fun game_stake_amount<T>(game: &Game<T>): u64 {
+        balance::value(&game.stake)
+    }
+
+    public fun game_fee_rate<T>(game: &Game<T>): u128 {
+        game.fee_rate
+    }
+
+    public fun game_seed<T>(game: &Game<T>): vector<u8> {
+        game.seed
+    }
+
+    // --------------- Private Funtions ---------------
+
+    fun compute_fee_amount(amount: u64, fee_rate: u128): u64 {
+        (((amount as u128) * fee_rate / FEE_PRECISION) as u64)
+    }
+    
+    fun min_u128(x: u128, y: u128): u128 {
+        if (x <= y) { x } else { y }
+    }
+
+    // --------------- Test only ---------------
 
     #[test_only]
     public fun init_for_testing(ctx: &mut TxContext) {
