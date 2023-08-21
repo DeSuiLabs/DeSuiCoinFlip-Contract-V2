@@ -222,49 +222,6 @@ module desui_labs::coin_flip_v2 {
         dof::add(&mut house.id, game_id, game);
     }
 
-    fun new_game<T>(
-        house: &House<T>,
-        guess: u8,
-        seed: vector<u8>,
-        stake: Coin<T>,
-        fee_rate: u128,
-        partnership_type: Option<TypeName>,
-        ctx: &mut TxContext,
-    ): (ID, Game<T>) {
-        // Ensure that guess is either 0 or 1
-        assert!(guess == 1 || guess == 0, EInvalidGuess);
-        // Ensure the stake amount is valid
-        let stake_amount = coin::value(&stake);
-        assert!(
-            stake_amount >= house.min_stake_amount &&
-            stake_amount <= house.max_stake_amount,
-            EInvalidStakeAmount
-        );
-
-        let id = object::new(ctx);
-        let game_id = object::uid_to_inner(&id);
-        let player = tx_context::sender(ctx);
-        event::emit(NewGame<T> {
-            game_id,
-            player,
-            guess,
-            seed,
-            stake_amount,
-            partnership_type,
-        });
-        
-        let game = Game<T> {
-            id,
-            player,
-            start_epoch: tx_context::epoch(ctx),
-            stake: coin::into_balance(stake),
-            guess,
-            seed,
-            fee_rate,
-        };
-        (game_id, game)
-    }
-
     // --------------- Settle Funtions ---------------
 
     public entry fun settle<T>(
@@ -403,6 +360,49 @@ module desui_labs::coin_flip_v2 {
     }
 
     // --------------- Private Funtions ---------------
+
+    fun new_game<T>(
+        house: &House<T>,
+        guess: u8,
+        seed: vector<u8>,
+        stake: Coin<T>,
+        fee_rate: u128,
+        partnership_type: Option<TypeName>,
+        ctx: &mut TxContext,
+    ): (ID, Game<T>) {
+        // Ensure that guess is either 0 or 1
+        assert!(guess == 1 || guess == 0, EInvalidGuess);
+        // Ensure the stake amount is valid
+        let stake_amount = coin::value(&stake);
+        assert!(
+            stake_amount >= house.min_stake_amount &&
+            stake_amount <= house.max_stake_amount,
+            EInvalidStakeAmount
+        );
+
+        let id = object::new(ctx);
+        let game_id = object::uid_to_inner(&id);
+        let player = tx_context::sender(ctx);
+        event::emit(NewGame<T> {
+            game_id,
+            player,
+            guess,
+            seed,
+            stake_amount,
+            partnership_type,
+        });
+        
+        let game = Game<T> {
+            id,
+            player,
+            start_epoch: tx_context::epoch(ctx),
+            stake: coin::into_balance(stake),
+            guess,
+            seed,
+            fee_rate,
+        };
+        (game_id, game)
+    }
 
     fun compute_fee_amount(amount: u64, fee_rate: u128): u64 {
         (((amount as u128) * fee_rate / FEE_PRECISION) as u64)
