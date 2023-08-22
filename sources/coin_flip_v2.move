@@ -152,6 +152,14 @@ module desui_labs::coin_flip_v2 {
         house.min_stake_amount = min_stake_amount;
     }
 
+    public entry fun update_fee_rate<T>(
+        _: &AdminCap,
+        house: &mut House<T>,
+        fee_rate: u128,
+    ) {
+        house.fee_rate = fee_rate;
+    }
+
     // --------------- Partnership Funtions ---------------
 
     public entry fun create_partnership<P>(
