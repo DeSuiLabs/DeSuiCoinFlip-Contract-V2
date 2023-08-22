@@ -1,6 +1,8 @@
 [package]
 name = "DeSuiCoinFlipContractV2/"
 version = "0.0.1"
+# published-at = "0xa3f08efd77bb203193e76699227663bc2243e4f5892182679e062535717a87ed"
+published-at = "0x485acda93ecd22801dc396edd2933b4e60b2fbc4555ab8d8b6ed49de77081797"
 
 [dependencies]
 Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "framework/testnet" }
