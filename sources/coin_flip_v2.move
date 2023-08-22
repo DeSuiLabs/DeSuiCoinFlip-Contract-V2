@@ -24,8 +24,8 @@ module desui_labs::coin_flip_v2 {
     const EInvalidStakeAmount: u64 = 0;
     const EInvalidGuess: u64 = 1;
     const EInvalidBlsSig: u64 = 2;
-    const EKioskItemNotFound: u64 = 4;
-    const ECannotChallenge: u64 = 5;
+    const EKioskItemNotFound: u64 = 3;
+    const ECannotChallenge: u64 = 4;
 
     // --------------- Events ---------------
 
