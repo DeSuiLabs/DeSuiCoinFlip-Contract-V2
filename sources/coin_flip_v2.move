@@ -26,6 +26,7 @@ module desui_labs::coin_flip_v2 {
     const EInvalidBlsSig: u64 = 2;
     const EKioskItemNotFound: u64 = 3;
     const ECannotChallenge: u64 = 4;
+    const EInvalidFeeRate: u64 = 5;
 
     // --------------- Events ---------------
 
@@ -95,6 +96,7 @@ module desui_labs::coin_flip_v2 {
         init_fund: Coin<T>,
         ctx: &mut TxContext,
     ) {
+        assert!(fee_rate < FEE_PRECISION, EInvalidFeeRate);
         transfer::share_object(House<T> {
             id: object::new(ctx),
             pub_key,
@@ -157,6 +159,7 @@ module desui_labs::coin_flip_v2 {
         house: &mut House<T>,
         fee_rate: u128,
     ) {
+        assert!(fee_rate < FEE_PRECISION, EInvalidFeeRate);
         house.fee_rate = fee_rate;
     }
 
@@ -265,11 +268,12 @@ module desui_labs::coin_flip_v2 {
         let player_won: bool = (guess == first_byte % 2);
 
         let pnl: u64 = if(player_won) {
-            let fee_amount = compute_fee_amount(stake_amount, fee_rate);
-            let fee = balance::split(&mut stake, fee_amount);
-            balance::join(&mut house.treasury, fee);
             let reward = balance::split(&mut house.pool, stake_amount);
             balance::join(&mut reward, stake);
+            let reward_amount = balance::value(&reward);
+            let fee_amount = compute_fee_amount(reward_amount, fee_rate);
+            let fee = balance::split(&mut reward, fee_amount);
+            balance::join(&mut house.treasury, fee);
             let reward_coin = coin::from_balance(reward, ctx);
             transfer::public_transfer(reward_coin, player);
             stake_amount - fee_amount
