@@ -17,7 +17,7 @@ module desui_labs::coin_flip_v2 {
     // --------------- Constants ---------------
 
     const FEE_PRECISION: u128 = 1_000_000;
-    const CHALLENGE_EPOCH_INTERVAL: u64 = 2;
+    const CHALLENGE_EPOCH_INTERVAL: u64 = 1;
 
     // --------------- Errors ---------------
 
@@ -133,8 +133,12 @@ module desui_labs::coin_flip_v2 {
         recipient: address,
         ctx: &mut TxContext,
     ) {
-        let fee_amount = balance::value(&house.treasury);
-        let fee = coin::take(&mut house.treasury, fee_amount, ctx);
+        let treaury_balance = house_treasury_balance(house);
+        let fee = coin::take(
+            &mut house.treasury,
+            treaury_balance,
+            ctx,
+        );
         transfer::public_transfer(fee, recipient);
     }
 
@@ -176,7 +180,7 @@ module desui_labs::coin_flip_v2 {
         });
     }
 
-    public entry fun update_partnership_rate<P>(
+    public entry fun update_partnership_fee_rate<P>(
         _: &AdminCap,
         partnership: &mut Partnership<P>,
         fee_rate: u128,
@@ -192,10 +196,11 @@ module desui_labs::coin_flip_v2 {
         seed: vector<u8>,
         stake: Coin<T>,
         ctx: &mut TxContext,
-    ) {
-        let fee_rate = house.fee_rate;
+    ): ID {
+        let fee_rate = house_fee_rate(house);
         let (game_id, game) = new_game(house, guess, seed, stake, fee_rate, option::none(), ctx);
         dof::add(&mut house.id, game_id, game);
+        game_id
     }
 
     public entry fun start_game_with_parternship<T, P: key>(
@@ -206,11 +211,15 @@ module desui_labs::coin_flip_v2 {
         partnership: &Partnership<P>,
         _proof: &P,
         ctx: &mut TxContext,
-    ) {
-        let fee_rate = min_u128(house.fee_rate, partnership.fee_rate);
+    ): ID {
+        let fee_rate = min_u128(
+            house_fee_rate(house),
+            partnership_fee_rate(partnership)
+        );
         let partnership_type = option::some(type_name::get<P>());
         let (game_id, game) = new_game(house, guess, seed, stake, fee_rate, partnership_type, ctx);
         dof::add(&mut house.id, game_id, game);
+        game_id
     }
 
     public entry fun start_game_with_kiosk<T, P: key + store>(
@@ -222,8 +231,11 @@ module desui_labs::coin_flip_v2 {
         kiosk: &Kiosk,
         item: ID,
         ctx: &mut TxContext,
-    ) {
-        let fee_rate = min_u128(house.fee_rate, partnership.fee_rate);
+    ): ID {
+        let fee_rate = min_u128(
+            house_fee_rate(house),
+            partnership_fee_rate(partnership)
+        );
         let partnership_type = option::some(type_name::get<P>());
         assert!(
             kiosk::has_item_with_type<P>(kiosk, item),
@@ -231,6 +243,7 @@ module desui_labs::coin_flip_v2 {
         );
         let (game_id, game) = new_game(house, guess, seed, stake, fee_rate, partnership_type, ctx);
         dof::add(&mut house.id, game_id, game);
+        game_id
     }
 
     // --------------- Settle Funtions ---------------
@@ -254,9 +267,10 @@ module desui_labs::coin_flip_v2 {
         } = game;
         let msg_vec = object::uid_to_bytes(&id);
         vector::append(&mut msg_vec, seed);
+        let public_key = house_pub_key(house);
         assert!(
             bls12381_min_pk_verify(
-                &bls_sig, &house.pub_key, &msg_vec,
+                &bls_sig, &public_key, &msg_vec,
             ),
             EInvalidBlsSig
         );
@@ -270,12 +284,11 @@ module desui_labs::coin_flip_v2 {
         let pnl: u64 = if(player_won) {
             let reward = balance::split(&mut house.pool, stake_amount);
             balance::join(&mut reward, stake);
-            let reward_amount = balance::value(&reward);
-            let fee_amount = compute_fee_amount(reward_amount, fee_rate);
+            let fee_amount = compute_fee_amount(stake_amount, fee_rate);
             let fee = balance::split(&mut reward, fee_amount);
             balance::join(&mut house.treasury, fee);
-            let reward_coin = coin::from_balance(reward, ctx);
-            transfer::public_transfer(reward_coin, player);
+            let reward = coin::from_balance(reward, ctx);
+            transfer::public_transfer(reward, player);
             stake_amount - fee_amount
         } else {
             balance::join(&mut house.pool, stake);
@@ -309,7 +322,7 @@ module desui_labs::coin_flip_v2 {
             fee_rate: _,
         } = game;
         // Ensure that minimum epochs have passed before user can cancel
-        assert!(start_epoch + CHALLENGE_EPOCH_INTERVAL <= current_epoch, ECannotChallenge);
+        assert!(current_epoch > start_epoch + CHALLENGE_EPOCH_INTERVAL, ECannotChallenge);
 
         transfer::public_transfer(coin::from_balance(stake, ctx), player);
         
@@ -335,6 +348,10 @@ module desui_labs::coin_flip_v2 {
 
     public fun house_pool_balance<T>(house: &House<T>): u64 {
         balance::value(&house.pool)
+    }
+
+    public fun house_treasury_balance<T>(house: &House<T>): u64 {
+        balance::value(&house.treasury)
     }
 
     public fun house_stake_range<T>(house: &House<T>): (u64, u64) {
@@ -371,7 +388,13 @@ module desui_labs::coin_flip_v2 {
         game.seed
     }
 
-    // --------------- Private Funtions ---------------
+    // --------------- Partnership Accessors ---------------
+
+    public fun partnership_fee_rate<P>(partnership: &Partnership<P>): u128 {
+        partnership.fee_rate
+    }
+
+    // --------------- Helper Funtions ---------------
 
     fun new_game<T>(
         house: &House<T>,
@@ -416,11 +439,11 @@ module desui_labs::coin_flip_v2 {
         (game_id, game)
     }
 
-    fun compute_fee_amount(amount: u64, fee_rate: u128): u64 {
+    public fun compute_fee_amount(amount: u64, fee_rate: u128): u64 {
         (((amount as u128) * fee_rate / FEE_PRECISION) as u64)
     }
     
-    fun min_u128(x: u128, y: u128): u128 {
+    public fun min_u128(x: u128, y: u128): u128 {
         if (x <= y) { x } else { y }
     }
 
@@ -432,26 +455,12 @@ module desui_labs::coin_flip_v2 {
     }
 
     #[test_only]
-    public fun start_game_for_testing<T>(
-        house: &mut House<T>,
-        guess: u8,
-        seed: vector<u8>,
-        stake: Coin<T>,
-        ctx: &mut TxContext
-    ): ID {
-        let fee_rate = house.fee_rate;
-        let (game_id, game) = new_game(house, guess, seed, stake, fee_rate, option::none(), ctx);
-        dof::add(&mut house.id, game_id, game);
-        game_id    
-    }
-
-    #[test_only]
     public fun settle_for_testing<T>(
         house: &mut House<T>,
         game_id: ID,
         bls_sig: vector<u8>,
         ctx: &mut TxContext,
-    ) {
+    ): bool {
         let game = dof::remove<ID, Game<T>>(&mut house.id, game_id);
         let Game {
             id,
@@ -478,13 +487,13 @@ module desui_labs::coin_flip_v2 {
         let player_won: bool = (guess == first_byte % 2);
 
         let pnl: u64 = if(player_won) {
-            let fee_amount = compute_fee_amount(stake_amount, fee_rate);
-            let fee = balance::split(&mut stake, fee_amount);
-            balance::join(&mut house.treasury, fee);
             let reward = balance::split(&mut house.pool, stake_amount);
             balance::join(&mut reward, stake);
-            let reward_coin = coin::from_balance(reward, ctx);
-            transfer::public_transfer(reward_coin, player);
+            let fee_amount = compute_fee_amount(stake_amount, fee_rate);
+            let fee = balance::split(&mut reward, fee_amount);
+            balance::join(&mut house.treasury, fee);
+            let reward = coin::from_balance(reward, ctx);
+            transfer::public_transfer(reward, player);
             stake_amount - fee_amount
         } else {
             balance::join(&mut house.pool, stake);
@@ -498,5 +507,6 @@ module desui_labs::coin_flip_v2 {
             pnl,
             challenged: false,
         });
+        player_won
     }
 }
