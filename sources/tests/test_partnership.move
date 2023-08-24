@@ -11,7 +11,7 @@ module desui_labs::test_partnership {
     use desui_labs::dlab::{Self, Dlab};
 
     #[test]
-    fun test_partnership_play_sui() {
+    fun test_play_using_sui() {
         let min_stake_amount: u64 = 1_000_000_000; // 1 SUI
         let max_stake_amount: u64 = 125_000_000_000; // 125 SUI
         let init_pool_amount: u64 = 100 * max_stake_amount;
@@ -134,7 +134,7 @@ module desui_labs::test_partnership {
     }
 
     #[test]
-    fun test_partnership_play_buck() {
+    fun test_play_using_buck() {
         let min_stake_amount: u64 = 1_000_000_000; // 1 SUI
         let max_stake_amount: u64 = 125_000_000_000; // 125 SUI
         let init_pool_amount: u64 = 100 * max_stake_amount;
