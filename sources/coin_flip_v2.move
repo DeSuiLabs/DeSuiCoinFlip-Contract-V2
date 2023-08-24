@@ -27,6 +27,8 @@ module desui_labs::coin_flip_v2 {
     const EKioskItemNotFound: u64 = 3;
     const ECannotChallenge: u64 = 4;
     const EInvalidFeeRate: u64 = 5;
+    const EPoolNotEnough: u64 = 6;
+    const EGameNotExists: u64 = 7;
 
     // --------------- Events ---------------
 
@@ -124,6 +126,7 @@ module desui_labs::coin_flip_v2 {
         recipient: address,
         ctx: &mut TxContext
     ) {
+        assert!(amount <= balance::value(&house.pool), 0);
         let coin = coin::take(&mut house.pool, amount, ctx);
         transfer::public_transfer(coin, recipient);
     }
@@ -186,6 +189,7 @@ module desui_labs::coin_flip_v2 {
         partnership: &mut Partnership<P>,
         fee_rate: u128,
     ) {
+        assert!(fee_rate < FEE_PRECISION, 0);
         partnership.fee_rate = fee_rate;
     }
 
@@ -256,6 +260,7 @@ module desui_labs::coin_flip_v2 {
         ctx: &mut TxContext,
     ): bool {
         let game_id = object::id_from_address(game_id);
+        assert!(game_exists(house, game_id), EGameNotExists);
         let game = dof::remove<ID, Game<T>>(&mut house.id, game_id);
         let Game {
             id,
@@ -299,6 +304,7 @@ module desui_labs::coin_flip_v2 {
         ctx: &mut TxContext,
     ) {
         let game_id = object::id_from_address(game_id);
+        assert!(game_exists(house, game_id), EGameNotExists);
         let current_epoch = tx_context::epoch(ctx);
         let game = dof::remove<ID, Game<T>>(&mut house.id, game_id);
         let Game {
