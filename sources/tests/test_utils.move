@@ -40,6 +40,18 @@ module desui_labs::test_utils {
         scenario_val
     }
 
+    public fun setup_partnership<P>(
+        scenario: &mut Scenario,
+        fee_rate: u128,
+    ) {
+        ts::next_tx(scenario, dev());
+        {
+            let admin_cap = ts::take_from_sender<AdminCap>(scenario);
+            cf::create_partnership<P>(&admin_cap, fee_rate, ts::ctx(scenario));
+            ts::return_to_sender(scenario, admin_cap);
+        };        
+    }
+
     public fun new_player_generator(
         seed: vector<u8>,
         min_stake_amount: u64,
