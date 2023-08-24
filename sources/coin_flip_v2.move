@@ -30,6 +30,7 @@ module desui_labs::coin_flip_v2 {
     const EInvalidFeeRate: u64 = 5;
     const EPoolNotEnough: u64 = 6;
     const EGameNotExists: u64 = 7;
+    const EBatchSettleInvalidInputs: u64 = 8;
 
     // --------------- Events ---------------
 
@@ -296,6 +297,25 @@ module desui_labs::coin_flip_v2 {
             challenged: false,
         });
         player_won
+    }
+
+    public entry fun batch_settle<T>(
+        house: &mut House<T>,
+        game_ids: vector<ID>,
+        bls_sigs: vector<vector<u8>>,
+        ctx: &mut TxContext,
+    ) {
+        assert!(
+            vector::length(&game_ids) == vector::length(&bls_sigs),
+            EBatchSettleInvalidInputs,
+        );
+        while(!vector::is_empty(&game_ids)) {
+            let game_id = vector::pop_back(&mut game_ids);
+            let bls_sig = vector::pop_back(&mut bls_sigs);
+            if (game_exists(house, game_id)) {
+                settle(house, game_id, bls_sig, ctx);
+            };
+        };
     }
 
     public entry fun challenge<T>(
