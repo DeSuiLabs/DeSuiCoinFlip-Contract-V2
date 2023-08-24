@@ -88,7 +88,7 @@ module desui_labs::coin_flip_v2 {
     // --------------- House Funtions ---------------
     
     public entry fun create_house<T>(
-        _cap: &AdminCap,
+        _: &AdminCap,
         pub_key: vector<u8>,
         fee_rate: u128,
         min_stake_amount: u64,
@@ -109,6 +109,7 @@ module desui_labs::coin_flip_v2 {
     }
 
     public entry fun top_up<T>(
+        _: &AdminCap,
         house: &mut House<T>,
         coin: Coin<T>,
     ) {        
