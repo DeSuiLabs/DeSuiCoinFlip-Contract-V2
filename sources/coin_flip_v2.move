@@ -127,7 +127,7 @@ module desui_labs::coin_flip_v2 {
         recipient: address,
         ctx: &mut TxContext
     ) {
-        assert!(amount <= balance::value(&house.pool), 0);
+        assert!(amount <= balance::value(&house.pool), EPoolNotEnough);
         let coin = coin::take(&mut house.pool, amount, ctx);
         transfer::public_transfer(coin, recipient);
     }
@@ -190,7 +190,7 @@ module desui_labs::coin_flip_v2 {
         partnership: &mut Partnership<P>,
         fee_rate: u128,
     ) {
-        assert!(fee_rate < FEE_PRECISION, 0);
+        assert!(fee_rate < FEE_PRECISION, EInvalidFeeRate);
         partnership.fee_rate = fee_rate;
     }
 
@@ -410,6 +410,7 @@ module desui_labs::coin_flip_v2 {
         );
         let stake = coin::into_balance(stake);
         // house place the stake
+        assert!(house_pool_balance(house) >= stake_amount, EPoolNotEnough);
         let house_stake = balance::split(&mut house.pool, stake_amount);
         balance::join(&mut stake, house_stake);
 
