@@ -46,12 +46,12 @@ module desui_labs::test_partnership {
             ts::next_tx(scenario, player);
             let (game_id, pool_balance, treasury_balance) = {
                 let house = ts::take_shared<House<SUI>>(scenario);
+                let pool_balance = cf::house_pool_balance(&house);
+                let treasury_balance = cf::house_treasury_balance(&house);
                 let partnership = ts::take_shared<Partnership<Dlab>>(scenario);
                 let dlab_nft = dlab::mint(ts::ctx(scenario));
                 let guess = ((idx % 2) as u8);
                 let game_id = cf::start_game_with_parternship(&mut house, guess, seed, stake, &partnership, &dlab_nft, ts::ctx(scenario));
-                let pool_balance = cf::house_pool_balance(&house);
-                let treasury_balance = cf::house_treasury_balance(&house);
                 ts::return_shared(house);
                 ts::return_shared(partnership);
                 transfer::public_transfer(dlab_nft, player);
@@ -63,6 +63,12 @@ module desui_labs::test_partnership {
             let player_won = {
                 let house = ts::take_shared<House<SUI>>(scenario);
                 assert!(cf::game_exists(&house, game_id), 0);
+                let game = cf::borrow_game(&house, game_id);
+                assert!(cf::game_guess(game) == ((idx % 2) as u8), 0);
+                assert!(cf::game_seed(game) == address::to_bytes(player), 0);
+                assert!(cf::game_stake_amount(game) == 2*stake_amount, 0);
+                assert!(cf::game_fee_rate(game) == discount_fee_rate, 0);
+                assert!(cf::house_pool_balance(&house) == pool_balance - stake_amount, 0);
                 let bls_sig = address::to_bytes(address::from_u256(address::to_u256(player) - (idx as u256)));
                 let player_won = cf::settle_for_testing(&mut house, game_id, bls_sig, ts::ctx(scenario));
                 ts::return_shared(house);
@@ -76,7 +82,7 @@ module desui_labs::test_partnership {
                 assert!(!cf::game_exists(&house, game_id), 0);
                 let pool_balance_after = cf::house_pool_balance(&house);
                 let treasury_balance_after = cf::house_treasury_balance(&house);
-                let fee_amount = ((((stake_amount*2) as u128) * discount_fee_rate / 1_000_000u128) as u64);
+                let fee_amount = ((((2*stake_amount) as u128) * discount_fee_rate / 1_000_000u128) as u64);
                 if (player_won) {
                     assert!(pool_balance_after == pool_balance - stake_amount, 0);
                     assert!(treasury_balance_after == treasury_balance + fee_amount, 0);
@@ -163,12 +169,12 @@ module desui_labs::test_partnership {
             ts::next_tx(scenario, player);
             let (game_id, pool_balance, treasury_balance) = {
                 let house = ts::take_shared<House<SUI>>(scenario);
+                let pool_balance = cf::house_pool_balance(&house);
+                let treasury_balance = cf::house_treasury_balance(&house);
                 let partnership = ts::take_shared<Partnership<Dlab>>(scenario);
                 let dlab_nft = dlab::mint(ts::ctx(scenario));
                 let guess = ((idx % 2) as u8);
                 let game_id = cf::start_game_with_parternship(&mut house, guess, seed, stake, &partnership, &dlab_nft, ts::ctx(scenario));
-                let pool_balance = cf::house_pool_balance(&house);
-                let treasury_balance = cf::house_treasury_balance(&house);
                 ts::return_shared(house);
                 ts::return_shared(partnership);
                 transfer::public_transfer(dlab_nft, player);
@@ -180,6 +186,12 @@ module desui_labs::test_partnership {
             let player_won = {
                 let house = ts::take_shared<House<SUI>>(scenario);
                 assert!(cf::game_exists(&house, game_id), 0);
+                let game = cf::borrow_game(&house, game_id);
+                assert!(cf::game_guess(game) == ((idx % 2) as u8), 0);
+                assert!(cf::game_seed(game) == address::to_bytes(player), 0);
+                assert!(cf::game_stake_amount(game) == 2*stake_amount, 0);
+                assert!(cf::game_fee_rate(game) == fee_rate, 0);
+                assert!(cf::house_pool_balance(&house) == pool_balance - stake_amount, 0);
                 let bls_sig = address::to_bytes(address::from_u256(address::to_u256(player) - (idx as u256)));
                 let player_won = cf::settle_for_testing(&mut house, game_id, bls_sig, ts::ctx(scenario));
                 ts::return_shared(house);
@@ -193,7 +205,7 @@ module desui_labs::test_partnership {
                 assert!(!cf::game_exists(&house, game_id), 0);
                 let pool_balance_after = cf::house_pool_balance(&house);
                 let treasury_balance_after = cf::house_treasury_balance(&house);
-                let fee_amount = ((((stake_amount*2) as u128) * fee_rate / 1_000_000u128) as u64);
+                let fee_amount = ((((2*stake_amount) as u128) * fee_rate / 1_000_000u128) as u64);
                 if (player_won) {
                     assert!(pool_balance_after == pool_balance - stake_amount, 0);
                     assert!(treasury_balance_after == treasury_balance + fee_amount, 0);
