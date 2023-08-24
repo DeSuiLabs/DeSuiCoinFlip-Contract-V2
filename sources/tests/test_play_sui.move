@@ -1,12 +1,11 @@
 #[test_only]
 module desui_labs::test_play_sui {
-    use std::vector;
     use sui::sui::SUI;
     use sui::coin::{Self, Coin};
     use sui::address;
     use sui::test_scenario as ts;
     use desui_labs::coin_flip_v2::{Self as cf, House, AdminCap};
-    use desui_labs::test_utils::{setup_house, setup_players, dev};
+    use desui_labs::test_utils as tu;
 
     #[test]
     fun test_play_sui() {
@@ -16,45 +15,45 @@ module desui_labs::test_play_sui {
         let fee_rate: u128 = 10_000; // 1%
         let player_count: u64 = 8_000;
 
-        let scenario_val = setup_house<SUI>(
+        let scenario_val = tu::setup_house<SUI>(
             init_pool_amount,
             fee_rate,
             min_stake_amount,
             max_stake_amount,
         );
         let scenario = &mut scenario_val;
-        let players = setup_players<SUI>(
-            scenario,
-            player_count,
+        let player_generator = tu::new_player_generator(
+            b"CoinFlip V2 Default",
             min_stake_amount,
             max_stake_amount,
-            b"CoinFlip V2",
         );
 
         // players start games and dev settle them
         let idx: u64 = 0;
         while(idx < player_count) {
-            let player = vector::pop_back(&mut players);
+            let (player, stake) = tu::gen_player_and_stake<SUI>(
+                &mut player_generator,
+                ts::ctx(scenario)
+            );
+            let stake_amount = coin::value(&stake);
             let seed = address::to_bytes(player);
             // start a game
             ts::next_tx(scenario, player);
-            let (game_id, stake_amount, pool_balance, treasury_balance) = {
+            let (game_id, pool_balance, treasury_balance) = {
                 let house = ts::take_shared<House<SUI>>(scenario);
-                let stake = ts::take_from_sender<Coin<SUI>>(scenario);
-                let stake_amount = coin::value(&stake);
                 let guess = ((idx % 2) as u8);
                 let game_id = cf::start_game(&mut house, guess, seed, stake, ts::ctx(scenario));
                 let pool_balance = cf::house_pool_balance(&house);
                 let treasury_balance = cf::house_treasury_balance(&house);
                 ts::return_shared(house);
-                (game_id, stake_amount, pool_balance, treasury_balance)
+                (game_id, pool_balance, treasury_balance)
             };
 
             // settle
-            ts::next_tx(scenario, dev());
+            ts::next_tx(scenario, tu::dev());
             let player_won = {
                 let house = ts::take_shared<House<SUI>>(scenario);
-                assert!(cf::is_unsettled(&house, game_id), 0);
+                assert!(cf::game_exists(&house, game_id), 0);
                 let bls_sig = address::to_bytes(address::from_u256(address::to_u256(player) - (idx as u256)));
                 let player_won = cf::settle_for_testing(&mut house, game_id, bls_sig, ts::ctx(scenario));
                 ts::return_shared(house);
@@ -62,14 +61,14 @@ module desui_labs::test_play_sui {
             };
 
             // check after settlement
-            ts::next_tx(scenario, dev());
+            ts::next_tx(scenario, tu::dev());
             {
 
                 let house = ts::take_shared<House<SUI>>(scenario);
-                assert!(!cf::is_unsettled(&house, game_id), 0);
+                assert!(!cf::game_exists(&house, game_id), 0);
                 let pool_balance_after = cf::house_pool_balance(&house);
                 let treasury_balance_after = cf::house_treasury_balance(&house);
-                let fee_amount = (((stake_amount as u128) * fee_rate / 1_000_000u128) as u64);
+                let fee_amount = ((((stake_amount*2) as u128) * fee_rate / 1_000_000u128) as u64);
                 if (player_won) {
                     assert!(pool_balance_after == pool_balance - stake_amount, 0);
                     assert!(treasury_balance_after == treasury_balance + fee_amount, 0);
@@ -91,7 +90,7 @@ module desui_labs::test_play_sui {
 
         // claim SUI from treasury
         let recipient: address = @0xcafe;
-        ts::next_tx(scenario, dev());
+        ts::next_tx(scenario, tu::dev());
         let treasury_balance = {
             let house = ts::take_shared<House<SUI>>(scenario);
             std::debug::print(&house);
@@ -104,7 +103,7 @@ module desui_labs::test_play_sui {
         };
 
         // check after claiming
-        ts::next_tx(scenario, dev());
+        ts::next_tx(scenario, tu::dev());
         {
             let house = ts::take_shared<House<SUI>>(scenario);
             assert!(cf::house_treasury_balance(&house) == 0, 0);

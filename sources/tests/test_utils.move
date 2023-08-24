@@ -1,15 +1,20 @@
 #[test_only]
 module desui_labs::test_utils {
-    use std::vector;
     use sui::address;
     use sui::balance;
-    use sui::coin;
-    use sui::transfer;
-    use sui::test_random;
+    use sui::coin::{Self, Coin};
+    use sui::tx_context::TxContext;
+    use sui::test_random::{Self, Random};
     use sui::test_scenario::{Self as ts, Scenario};
     use desui_labs::coin_flip_v2::{Self as cf, AdminCap};
 
     const DEV: address = @0xde1;
+
+    struct PlayerGenerator has store, drop {
+        random: Random,
+        min_stake_amount: u64,
+        max_stake_amount: u64,
+    }
 
     public fun setup_house<T>(
         init_pool_amount: u64,
@@ -35,34 +40,31 @@ module desui_labs::test_utils {
         scenario_val
     }
 
-    public fun setup_players<T>(
-        scenario: &mut Scenario,
-        player_count: u64,
+    public fun new_player_generator(
+        seed: vector<u8>,
         min_stake_amount: u64,
         max_stake_amount: u64,
-        seed: vector<u8>,
-    ): vector<address> {
-        vector::push_back(&mut seed, ((player_count % 256) as u8));
-        let stake_amount_diff = max_stake_amount - min_stake_amount;
-        let rang = test_random::new(seed);
-        let rangr = &mut rang;
+    ): PlayerGenerator {
+        PlayerGenerator {
+            random: test_random::new(seed),
+            min_stake_amount,
+            max_stake_amount,
+        }
+    }
 
-        let players = vector<address>[];
-        let idx: u64 = 0;
-        while (idx <= player_count) {
-            let player = address::from_u256(test_random::next_u256(rangr));
-            ts::next_tx(scenario, player);
-            {
-                let stake_amount = min_stake_amount + test_random::next_u64(rangr) % stake_amount_diff;
-                let stake = balance::create_for_testing<T>(stake_amount);
-                let stake = coin::from_balance(stake, ts::ctx(scenario));
-                transfer::public_transfer(stake, player);
-            };
-            vector::push_back(&mut players, player);
-            idx = idx + 1;
-        };
-
-        players
+    public fun gen_player_and_stake<T>(
+        generator: &mut PlayerGenerator,
+        ctx: &mut TxContext,
+    ): (address, Coin<T>) {
+        let random = &mut generator.random;
+        let player = address::from_u256(test_random::next_u256(random));
+        let stake_amount_diff = generator.max_stake_amount - generator.min_stake_amount;
+        let stake = balance::create_for_testing<T>(
+            generator.min_stake_amount +
+            test_random::next_u64(random) % stake_amount_diff
+        );
+        let stake = coin::from_balance(stake, ctx);
+        (player, stake)
     }
 
     public fun dev(): address { DEV }

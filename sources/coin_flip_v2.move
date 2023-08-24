@@ -253,7 +253,7 @@ module desui_labs::coin_flip_v2 {
         game_id: address,
         bls_sig: vector<u8>,
         ctx: &mut TxContext,
-    ) {
+    ): bool {
         let game_id = object::id_from_address(game_id);
         let game = dof::remove<ID, Game<T>>(&mut house.id, game_id);
         let Game {
@@ -274,26 +274,13 @@ module desui_labs::coin_flip_v2 {
             ),
             EInvalidBlsSig
         );
-        let stake_amount = balance::value(&stake);
         object::delete(id);
 
         let hashed_beacon = blake2b256(&bls_sig);
         let first_byte = *vector::borrow(&hashed_beacon, 0);
         let player_won: bool = (guess == first_byte % 2);
 
-        let pnl: u64 = if(player_won) {
-            let reward = balance::split(&mut house.pool, stake_amount);
-            balance::join(&mut reward, stake);
-            let fee_amount = compute_fee_amount(stake_amount, fee_rate);
-            let fee = balance::split(&mut reward, fee_amount);
-            balance::join(&mut house.treasury, fee);
-            let reward = coin::from_balance(reward, ctx);
-            transfer::public_transfer(reward, player);
-            stake_amount - fee_amount
-        } else {
-            balance::join(&mut house.pool, stake);
-            stake_amount
-        };
+        let pnl = distribute_reward(house, player, player_won, stake, fee_rate, ctx);
 
         event::emit(Outcome<T> {
             game_id,
@@ -302,6 +289,7 @@ module desui_labs::coin_flip_v2 {
             pnl,
             challenged: false,
         });
+        player_won
     }
 
     public entry fun challenge<T>(
@@ -358,7 +346,7 @@ module desui_labs::coin_flip_v2 {
         (house.min_stake_amount, house.max_stake_amount)
     }
 
-    public fun is_unsettled<T>(house: &House<T>, game_id: ID): bool {
+    public fun game_exists<T>(house: &House<T>, game_id: ID): bool {
         dof::exists_with_type<ID, Game<T>>(&house.id, game_id)
     }
 
@@ -439,6 +427,31 @@ module desui_labs::coin_flip_v2 {
         (game_id, game)
     }
 
+    fun distribute_reward<T>(
+        house: &mut House<T>,
+        player: address,
+        player_won: bool,
+        stake: Balance<T>,
+        fee_rate: u128,
+        ctx: &mut TxContext,
+    ): u64 {
+        let stake_amount = balance::value(&stake);
+        if(player_won) {
+            let reward = balance::split(&mut house.pool, stake_amount);
+            balance::join(&mut reward, stake);
+            let reward_amount = balance::value(&reward);
+            let fee_amount = compute_fee_amount(reward_amount, fee_rate);
+            let fee = balance::split(&mut reward, fee_amount);
+            balance::join(&mut house.treasury, fee);
+            let reward = coin::from_balance(reward, ctx);
+            transfer::public_transfer(reward, player);
+            stake_amount - fee_amount
+        } else {
+            balance::join(&mut house.pool, stake);
+            stake_amount
+        }
+    }
+
     public fun compute_fee_amount(amount: u64, fee_rate: u128): u64 {
         (((amount as u128) * fee_rate / FEE_PRECISION) as u64)
     }
@@ -479,34 +492,13 @@ module desui_labs::coin_flip_v2 {
         //     ),
         //     EInvalidBlsSig
         // );
-        let stake_amount = balance::value(&stake);
         object::delete(id);
 
         let hashed_beacon = blake2b256(&bls_sig);
         let first_byte = *vector::borrow(&hashed_beacon, 0);
         let player_won: bool = (guess == first_byte % 2);
 
-        let pnl: u64 = if(player_won) {
-            let reward = balance::split(&mut house.pool, stake_amount);
-            balance::join(&mut reward, stake);
-            let fee_amount = compute_fee_amount(stake_amount, fee_rate);
-            let fee = balance::split(&mut reward, fee_amount);
-            balance::join(&mut house.treasury, fee);
-            let reward = coin::from_balance(reward, ctx);
-            transfer::public_transfer(reward, player);
-            stake_amount - fee_amount
-        } else {
-            balance::join(&mut house.pool, stake);
-            stake_amount
-        };
-
-        event::emit(Outcome<T> {
-            game_id,
-            player,
-            player_won,
-            pnl,
-            challenged: false,
-        });
+        distribute_reward(house, player, player_won, stake, fee_rate, ctx);
         player_won
     }
 }
