@@ -255,11 +255,10 @@ module desui_labs::coin_flip_v2 {
 
     public entry fun settle<T>(
         house: &mut House<T>,
-        game_id: address,
+        game_id: ID,
         bls_sig: vector<u8>,
         ctx: &mut TxContext,
     ): bool {
-        let game_id = object::id_from_address(game_id);
         assert!(game_exists(house, game_id), EGameNotExists);
         let game = dof::remove<ID, Game<T>>(&mut house.id, game_id);
         let Game {
@@ -300,10 +299,9 @@ module desui_labs::coin_flip_v2 {
 
     public entry fun challenge<T>(
         house: &mut House<T>,
-        game_id: address,
+        game_id: ID,
         ctx: &mut TxContext,
     ) {
-        let game_id = object::id_from_address(game_id);
         assert!(game_exists(house, game_id), EGameNotExists);
         let current_epoch = tx_context::epoch(ctx);
         let game = dof::remove<ID, Game<T>>(&mut house.id, game_id);
