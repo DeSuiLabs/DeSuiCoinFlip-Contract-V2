@@ -337,7 +337,7 @@ module desui_labs::coin_flip_v2 {
         } = game;
         // Ensure that minimum epochs have passed before user can cancel
         assert!(current_epoch > start_epoch + CHALLENGE_EPOCH_INTERVAL, ECannotChallenge);
-
+        let original_stake_amount = balance::value(&stake) / 2;
         transfer::public_transfer(coin::from_balance(stake, ctx), player);
         
         object::delete(id);
@@ -345,7 +345,7 @@ module desui_labs::coin_flip_v2 {
             game_id,
             player,
             player_won: true,
-            pnl: 0,
+            pnl: original_stake_amount,
             challenged: true,
         });
     }
@@ -467,16 +467,17 @@ module desui_labs::coin_flip_v2 {
         ctx: &mut TxContext,
     ): u64 {
         let stake_amount = balance::value(&stake);
+        let original_stake_amount = stake_amount / 2;
         if(player_won) {
             let fee_amount = compute_fee_amount(stake_amount, fee_rate);
             let fee = balance::split(&mut stake, fee_amount);
             balance::join(&mut house.treasury, fee);
             let reward = coin::from_balance(stake, ctx);
             transfer::public_transfer(reward, player);
-            stake_amount - fee_amount
+            original_stake_amount - fee_amount
         } else {
             balance::join(&mut house.pool, stake);
-            stake_amount
+            original_stake_amount
         }
     }
 
