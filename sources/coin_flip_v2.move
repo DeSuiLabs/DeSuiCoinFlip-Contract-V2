@@ -13,6 +13,7 @@ module desui_labs::coin_flip_v2 {
     use sui::kiosk::{Self, Kiosk};
     use sui::event;
     use sui::dynamic_object_field as dof;
+    use sui::package;
 
     // --------------- Constants ---------------
 
@@ -82,11 +83,18 @@ module desui_labs::coin_flip_v2 {
         id: UID,
     }
 
+    // --------------- Witness ---------------
+
+    struct COIN_FLIP_V2 has drop {}
+
     // --------------- Constructor ---------------
 
-    fun init(ctx: &mut TxContext) {
+    fun init(otw: COIN_FLIP_V2, ctx: &mut TxContext) {
+        let admin = tx_context::sender(ctx);
+        let publisher = package::claim(otw, ctx);
+        transfer::public_transfer(publisher, admin);
         let admin_cap = AdminCap { id: object::new(ctx) };
-        transfer::transfer(admin_cap, tx_context::sender(ctx));
+        transfer::transfer(admin_cap, admin);
     }
 
     // --------------- House Funtions ---------------
@@ -492,8 +500,8 @@ module desui_labs::coin_flip_v2 {
     // --------------- Test only ---------------
 
     #[test_only]
-    public fun init_for_testing(ctx: &mut TxContext) {
-        init(ctx)
+    public fun init_for_testing(otw: COIN_FLIP_V2, ctx: &mut TxContext) {
+        init(otw, ctx)
     }
 
     #[test_only]

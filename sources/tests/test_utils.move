@@ -6,7 +6,8 @@ module desui_labs::test_utils {
     use sui::tx_context::TxContext;
     use sui::test_random::{Self, Random};
     use sui::test_scenario::{Self as ts, Scenario};
-    use desui_labs::coin_flip_v2::{Self as cf, AdminCap};
+    use sui::test_utils::create_one_time_witness;
+    use desui_labs::coin_flip_v2::{Self as cf, AdminCap, COIN_FLIP_V2};
 
     const DEV: address = @0xde1;
 
@@ -25,7 +26,8 @@ module desui_labs::test_utils {
         let scenario_val = ts::begin(dev());
         let scenario = &mut scenario_val;
         {
-            cf::init_for_testing(ts::ctx(scenario));
+            let otw = create_one_time_witness<COIN_FLIP_V2>();
+            cf::init_for_testing(otw, ts::ctx(scenario));
         };
 
         ts::next_tx(scenario, dev());
