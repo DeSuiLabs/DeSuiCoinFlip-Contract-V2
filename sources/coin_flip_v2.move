@@ -52,6 +52,10 @@ module desui_labs::coin_flip_v2 {
         challenged: bool,
     }
 
+    struct FeeCollected<phantom T> has copy, drop {
+        amount: u64,
+    }
+
     // --------------- Objects ---------------
 
     struct House<phantom T> has key {
@@ -479,6 +483,9 @@ module desui_labs::coin_flip_v2 {
         if(player_won) {
             let fee_amount = compute_fee_amount(stake_amount, fee_rate);
             let fee = balance::split(&mut stake, fee_amount);
+            event::emit(FeeCollected<T> {
+                amount: fee_amount,
+            });
             balance::join(&mut house.treasury, fee);
             let reward = coin::from_balance(stake, ctx);
             transfer::public_transfer(reward, player);
