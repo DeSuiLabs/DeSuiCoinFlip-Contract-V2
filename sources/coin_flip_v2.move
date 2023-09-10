@@ -185,7 +185,7 @@ module desui_labs::coin_flip_v2 {
         house.fee_rate = fee_rate;
     }
 
-    public entry fun copy_admin_cap_to<T>(
+    public entry fun copy_admin_cap_to(
         _: &AdminCap,
         to: address,
         ctx: &mut TxContext,
