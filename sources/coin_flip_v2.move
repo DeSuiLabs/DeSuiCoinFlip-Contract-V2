@@ -185,6 +185,15 @@ module desui_labs::coin_flip_v2 {
         house.fee_rate = fee_rate;
     }
 
+    public entry fun copy_admin_cap_to<T>(
+        _: &AdminCap,
+        to: address,
+        ctx: &mut TxContext,
+    ) {
+        let admin_cap = AdminCap { id: object::new(ctx)};
+        transfer::transfer(admin_cap, to);
+    }
+
     // --------------- Partnership Funtions ---------------
 
     public entry fun create_partnership<P>(
