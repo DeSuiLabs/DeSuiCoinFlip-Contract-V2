@@ -18,7 +18,7 @@ module desui_labs::coin_flip_v2 {
     // --------------- Constants ---------------
 
     const FEE_PRECISION: u128 = 1_000_000;
-    const MAX_FEE_RATE: u128 = 10_000;
+    const MAX_FEE_RATE: u128 = 1_000_000;
     const CHALLENGE_EPOCH_INTERVAL: u64 = 7;
 
     // --------------- Errors ---------------
